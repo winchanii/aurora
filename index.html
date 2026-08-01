@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>АВРОРА БАНДЛ</title>
+<link rel="icon" href="favicon.ico" type="image/x-icon">
+    <style>
+        :root {
+            --bg-color: #0f1115;
+            --card-bg: rgba(22, 27, 34, 0.85);
+            --card-bg-solid: #161b22;
+            --accent-color: #5865F2;
+            --text-color: #c9d1d9;
+            --border-color: #30363d;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+
+        /* Полноэкранный контейнер для карты */
+        .viewer-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            cursor: grab;
+            touch-action: none;
+        }
+
+        .viewer-container:active {
+            cursor: grabbing;
+        }
+
+        .zoom-wrapper {
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform-origin: 0 0;
+            will-change: transform;
+        }
+
+        .zoom-wrapper img {
+            display: block;
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+
+        .nick-marker {
+            position: absolute;
+            border: 2px solid transparent;
+            background: rgba(88, 101, 242, 0.2);
+            cursor: pointer;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .nick-marker:hover, .nick-marker.active {
+            background: rgba(88, 101, 242, 0.5);
+            border-color: var(--accent-color);
+        }
+
+        /* Плавающий сайдбар поверх карты */
+        .sidebar {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 340px;
+            max-height: calc(100vh - 40px);
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            z-index: 1000;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            background: #0d1117;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-color);
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--accent-color);
+        }
+
+        .nick-list {
+            overflow-y: auto;
+            max-height: 200px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .nick-item {
+            padding: 8px 12px;
+            background: rgba(13, 17, 23, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s, border-color 0.2s;
+            font-size: 14px;
+        }
+        .nick-item:hover, .nick-item.active {
+            background: #1f6feb;
+            border-color: #388bfd;
+            color: #fff;
+        }
+
+        /* Блок предупреждения */
+        .search-warning {
+            background: rgba(13, 17, 23, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 12px;
+            font-size: 12px;
+            color: #8b949e;
+            line-height: 1.4;
+        }
+        .search-warning a {
+            color: #58a6ff;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .search-warning a:hover {
+            text-decoration: underline;
+        }
+
+        .info-panel {
+            background: rgba(13, 17, 23, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 15px;
+        }
+        .btn {
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 10px;
+            width: 100%;
+            transition: background 0.2s;
+        }
+        .btn:hover {
+            background: #4752c4;
+        }
+        .error-msg {
+            margin-top: 10px;
+            font-size: 13px;
+            color: #ff7b72;
+        }
+        .error-msg a {
+            color: #58a6ff;
+            text-decoration: none;
+        }
+
+        /* Подсказка управления снизу слева */
+        .controls-hint {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color);
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            color: #8b949e;
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        footer {
+            position: fixed;
+            bottom: 20px;
+            right: 380px;
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color);
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #8b949e;
+            z-index: 1000;
+        }
+        footer a {
+            color: #58a6ff;
+            text-decoration: none;
+        }
+
+        /* Адаптивность для мобилок */
+        @media (max-width: 768px) {
+            .sidebar {
+                top: auto;
+                bottom: 0;
+                right: 0;
+                left: 0;
+                width: 100%;
+                max-height: 55vh;
+                border-radius: 16px 16px 0 0;
+                padding: 15px;
+            }
+            footer {
+                display: none;
+            }
+            .controls-hint {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Область просмотра карты -->
+    <div class="viewer-container" id="viewerContainer">
+        <div class="zoom-wrapper" id="zoomWrapper">
+            <img src="wallpaper_2.jpg" alt="Map" id="mapImage" onload="initMap()">
+        </div>
+    </div>
+
+    <!-- Подсказка по управлению -->
+    <div class="controls-hint">
+        <b>Колесико мыши</b> — плавный зум<br>
+        <b>ПКМ (правая кнопка) / Свайп</b> — перемещение
+    </div>
+
+    <footer>
+        by winchan &bull; <a href="https://winchanii.ru" target="_blank">winchanii.ru</a>
+    </footer>
+
+    <!-- Сайдбар -->
+    <div class="sidebar">
+        <h3 style="margin:0;">Список ников</h3>
+        <input type="text" id="searchInput" placeholder="Поиск ников..." oninput="filterNicks()">
+        
+        <div class="nick-list" id="nickList"></div>
+
+        <!-- Предупреждение -->
+        <div class="search-warning">
+            ⚠️ Ваш ник может быть не цельным — ищите по частям. Если на сайте он разделен на части, Отпишите <a href="https://t.me/winchan" target="_blank">@winchan</a>.<br><br>
+            🔢 Если в нике были цифры, читавшиеся как буквы, попробуйте заменить их (например, 7 на T, 4 на A и т.д.).<br><br>
+            🔍 Если ваш ник есть на логотипе, но его нет на сайте, отпишите <a href="https://t.me/winchan" target="_blank">@winchan</a>.<br><br>
+            🧨 Также, В вашем нике вместо буквы Y может быть буква X, и наоборот, Тоже самое касается M и N, если в вашем нике перепутаны буквы, жду вас <a href="https://t.me/winchan" target="_blank">@winchan</a>.
+        </div>
+
+        <div class="info-panel" id="infoPanel">
+            <h4 id="selectedTitle" style="margin:0 0 8px 0;">Выберите ник</h4>
+            <div id="selectedContent" style="font-size: 13px;">Кликните по нику на карте или в списке.</div>
+        </div>
+    </div>
+
+    <script>
+        let nicknamesData = [];
+        let activeId = null;
+
+        let scale = 1;
+        let pointX = 0;
+        let pointY = 0;
+        let isDragging = false;
+        let startX = 0, startY = 0;
+
+        const container = document.getElementById('viewerContainer');
+        const wrapper = document.getElementById('zoomWrapper');
+        const nickListElem = document.getElementById('nickList');
+        const selectedTitle = document.getElementById('selectedTitle');
+        const selectedContent = document.getElementById('selectedContent');
+        const searchInput = document.getElementById('searchInput');
+
+        async function initMap() {
+            try {
+                const response = await fetch('coordinates.json');
+                const data = await response.json();
+                
+                let id = 1;
+                nicknamesData = Object.entries(data).map(([name, coords]) => ({
+                    id: id++,
+                    name: name,
+                    x: coords.x,
+                    y: coords.y,
+                    width: coords.width,
+                    height: coords.height
+                }));
+
+                createMarkers();
+                renderList(nicknamesData);
+                centerMap();
+            } catch (error) {
+                console.error('Ошибка загрузки coordinates.json:', error);
+                selectedContent.innerHTML = '<div class="error-msg">Не удалось загрузить coordinates.json. Проверьте запуск через локальный сервер.</div>';
+            }
+        }
+
+        function centerMap() {
+            const img = document.getElementById('mapImage');
+            if (!img) return;
+            const containerWidth = container.clientWidth;
+            const containerHeight = container.clientHeight;
+            
+            scale = Math.min(containerWidth / img.naturalWidth, containerHeight / img.naturalHeight) * 0.9;
+            pointX = (containerWidth - img.naturalWidth * scale) / 2;
+            pointY = (containerHeight - img.naturalHeight * scale) / 2;
+            updateTransform();
+        }
+
+        function updateTransform() {
+            wrapper.style.transform = `translate(${pointX}px, ${pointY}px) scale(${scale})`;
+        }
+
+        function createMarkers() {
+            document.querySelectorAll('.nick-marker').forEach(el => el.remove());
+
+            nicknamesData.forEach(item => {
+                const marker = document.createElement('div');
+                marker.className = 'nick-marker';
+                marker.style.left = item.x + 'px';
+                marker.style.top = item.y + 'px';
+                marker.style.width = item.width + 'px';
+                marker.style.height = item.height + 'px';
+                marker.title = item.name;
+                marker.dataset.id = item.id;
+
+                marker.onclick = (e) => {
+                    e.stopPropagation();
+                    selectNick(item.id);
+                };
+                wrapper.appendChild(marker);
+            });
+        }
+
+        function renderList(data) {
+            nickListElem.innerHTML = '';
+            data.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'nick-item' + (activeId === item.id ? ' active' : '');
+                div.textContent = item.name;
+                div.onclick = () => {
+                    selectNick(item.id);
+                    focusOnMarker(item);
+                };
+                nickListElem.appendChild(div);
+            });
+        }
+
+        function selectNick(id) {
+            activeId = id;
+            const item = nicknamesData.find(n => n.id === id);
+            if (!item) return;
+
+            document.querySelectorAll('.nick-marker').forEach(m => {
+                if (parseInt(m.dataset.id) === id) {
+                    m.classList.add('active');
+                } else {
+                    m.classList.remove('active');
+                }
+            });
+
+            renderList(nicknamesData.filter(n => n.name.toLowerCase().includes(searchInput.value.toLowerCase())));
+
+            selectedTitle.textContent = item.name;
+            selectedContent.innerHTML = `
+                Выбран ник: <b>${item.name}</b>
+                <button class="btn" onclick="showReplacePrompt()">Заменить</button>
+                <div id="replaceContainer"></div>
+            `;
+        }
+
+        function focusOnMarker(item) {
+            const containerWidth = container.clientWidth;
+            const containerHeight = container.clientHeight;
+            scale = 2.5;
+            pointX = containerWidth / 2 - (item.x + item.width / 2) * scale;
+            pointY = containerHeight / 2 - (item.y + item.height / 2) * scale;
+            updateTransform();
+        }
+
+        function showReplacePrompt() {
+            const replaceContainer = document.getElementById('replaceContainer');
+            replaceContainer.innerHTML = `
+                <div class="error-msg">
+                    неправильно написан ник? обратись к <a href="https://t.me/winchan" target="_blank">@winchan</a>
+                </div>
+            `;
+        }
+
+        function filterNicks() {
+            const query = searchInput.value.toLowerCase();
+            const filtered = nicknamesData.filter(n => n.name.toLowerCase().includes(query));
+            renderList(filtered);
+        }
+
+        // Управление: Зум и Перемещение
+        container.addEventListener('mousedown', (e) => {
+            if (e.button === 2) {
+                isDragging = true;
+                startX = e.clientX - pointX;
+                startY = e.clientY - pointY;
+                e.preventDefault();
+            }
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            pointX = e.clientX - startX;
+            pointY = e.clientY - startY;
+            updateTransform();
+        });
+
+        window.addEventListener('mouseup', (e) => {
+            if (e.button === 2) {
+                isDragging = false;
+            }
+        });
+
+        container.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        container.addEventListener('wheel', (e) => {
+            e.preventDefault();
+
+            const zoomIntensity = 0.12;
+            const rect = container.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            const prevScale = scale;
+            if (e.deltaY < 0) {
+                scale *= (1 + zoomIntensity);
+            } else {
+                scale /= (1 + zoomIntensity);
+            }
+
+            scale = Math.max(0.1, Math.min(scale, 15));
+
+            pointX = mouseX - (mouseX - pointX) * (scale / prevScale);
+            pointY = mouseY - (mouseY - pointY) * (scale / prevScale);
+
+            updateTransform();
+        }, { passive: false });
+
+        let initialDistance = null;
+        let touchStartX = 0, touchStartY = 0;
+
+        container.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                isDragging = true;
+                touchStartX = e.touches[0].clientX - pointX;
+                touchStartY = e.touches[0].clientY - pointY;
+            } else if (e.touches.length === 2) {
+                isDragging = false;
+                initialDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+            }
+        }, { passive: true });
+
+        container.addEventListener('touchmove', (e) => {
+            if (isDragging && e.touches.length === 1) {
+                pointX = e.touches[0].clientX - touchStartX;
+                pointY = e.touches[0].clientY - touchStartY;
+                updateTransform();
+            } else if (e.touches.length === 2 && initialDistance) {
+                const currentDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                const factor = currentDistance / initialDistance;
+                initialDistance = currentDistance;
+
+                const rect = container.getBoundingClientRect();
+                const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+                const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+
+                const prevScale = scale;
+                scale = Math.max(0.1, Math.min(scale * factor, 15));
+
+                pointX = centerX - (centerX - pointX) * (scale / prevScale);
+                pointY = centerY - (centerY - pointY) * (scale / prevScale);
+
+                updateTransform();
+            }
+        }, { passive: true });
+
+        container.addEventListener('touchend', () => {
+            isDragging = false;
+            initialDistance = null;
+        });
+    </script>
+</body>
+</html>
